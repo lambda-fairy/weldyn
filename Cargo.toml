@@ -1,0 +1,11 @@
+[package]
+name = "weldyn"
+version = "0.1.0"
+authors = ["Chris Wong <lambda.fairy@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures-preview = "0.3.0-alpha.16"
+runtime = "0.3.0-alpha.5"
