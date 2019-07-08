@@ -1,12 +1,12 @@
 use crate::error::{Error, Result};
 
-pub struct Deserializer<'de> {
+struct Parser<'de> {
     input: &'de [u8],
 }
 
-impl<'de> Deserializer<'de> {
-    pub fn new(input: &'de [u8]) -> Self {
-        Deserializer { input }
+impl<'de> Parser<'de> {
+    fn new(input: &'de [u8]) -> Self {
+        Parser { input }
     }
 
     fn peek(&mut self) -> Option<u8> {
@@ -19,7 +19,7 @@ impl<'de> Deserializer<'de> {
         Some(b)
     }
 
-    pub fn assert_end(&self) -> Result<()> {
+    fn assert_end(&self) -> Result<()> {
         if self.input.len() > 0 {
             return Err(Error::TrailingCharacters);
         }
@@ -42,12 +42,12 @@ impl<'de> Deserializer<'de> {
     ///
     /// By convention, all parsers (methods starting with `parse_`) handle
     /// trailing whitespace.
-    pub fn space(&mut self) {
+    fn space(&mut self) {
         while self.consume(|b| b == b'\t' || b == b'\n' || b == b' ').is_some() {}
     }
 
     /// Parses a translatable marker (`_`).
-    pub fn parse_translatable_marker(&mut self) -> Result<()> {
+    fn parse_translatable_marker(&mut self) -> Result<()> {
         if self.consume(|b| b == b'_').is_none() {
             return Err(Error::ExpectedTranslatable);
         }
@@ -56,7 +56,7 @@ impl<'de> Deserializer<'de> {
     }
 
     /// Parses a string.
-    pub fn parse_string(&mut self) -> Result<Vec<u8>> {
+    fn parse_string(&mut self) -> Result<Vec<u8>> {
         if self.next().ok_or(Error::EofWhileParsingString)? != b'"' {
             return Err(Error::ExpectedString);
         }
@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn trans() {
-        let mut de = Deserializer::new(br#"_ "#);
+        let mut de = Parser::new(br#"_ "#);
         let result = de.parse_translatable_marker().unwrap();
         de.assert_end().unwrap();
         assert_eq!(result, ());
@@ -92,21 +92,21 @@ mod tests {
 
     #[test]
     fn cis() {
-        let mut de = Deserializer::new(br#""hello""#);
+        let mut de = Parser::new(br#""hello""#);
         let result = de.parse_translatable_marker().unwrap_err();
         assert_eq!(result, Error::ExpectedTranslatable);
     }
 
     #[test]
     fn string() {
-        let mut de = Deserializer::new(br#""hello""#);
+        let mut de = Parser::new(br#""hello""#);
         let result = de.parse_string().unwrap();
         assert_eq!(result, b"hello");
     }
 
     #[test]
     fn string_escapes() {
-        let mut de = Deserializer::new(br#""hello ""world""""#);
+        let mut de = Parser::new(br#""hello ""world""""#);
         let result = de.parse_string().unwrap();
         assert_eq!(result, br#"hello "world""#);
     }
