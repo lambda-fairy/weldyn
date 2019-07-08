@@ -9,14 +9,14 @@ impl<'de> Deserializer<'de> {
         Deserializer { input }
     }
 
-    fn peek(&mut self) -> Result<u8> {
-        self.input.first().copied().ok_or(Error::EndOfInput)
+    fn peek(&mut self) -> Option<u8> {
+        self.input.first().copied()
     }
 
-    fn next(&mut self) -> Result<u8> {
+    fn next(&mut self) -> Option<u8> {
         let b = self.peek()?;
         self.input = &self.input[1..];
-        Ok(b)
+        Some(b)
     }
 
     pub fn assert_end(&self) -> Result<()> {
@@ -28,13 +28,13 @@ impl<'de> Deserializer<'de> {
 
     /// Attempts to match a single byte matching the pattern. Does not consume
     /// on failure.
-    fn consume(&mut self, pattern: impl BytePattern) -> bool {
+    fn consume(&mut self, pattern: impl Fn(u8) -> bool) -> Option<u8> {
         match self.peek() {
-            Ok(b) if pattern.matches(b) => {
+            Some(b) if pattern(b) => {
                 self.next().unwrap();
-                true
+                Some(b)
             }
-            _ => false,
+            _ => None,
         }
     }
 
@@ -43,12 +43,12 @@ impl<'de> Deserializer<'de> {
     /// By convention, all parsers (methods starting with `parse_`) handle
     /// trailing whitespace.
     pub fn space(&mut self) {
-        while self.consume(b"\t\n ") {}
+        while self.consume(|b| b == b'\t' || b == b'\n' || b == b' ').is_some() {}
     }
 
     /// Parses a translatable marker (`_`).
     pub fn parse_translatable_marker(&mut self) -> Result<()> {
-        if !self.consume(b'_') {
+        if self.consume(|b| b == b'_').is_none() {
             return Err(Error::ExpectedTranslatable);
         }
         self.space();
@@ -57,14 +57,14 @@ impl<'de> Deserializer<'de> {
 
     /// Parses a string.
     pub fn parse_string(&mut self) -> Result<Vec<u8>> {
-        if self.next()? != b'"' {
+        if self.next().ok_or(Error::EofWhileParsingString)? != b'"' {
             return Err(Error::ExpectedString);
         }
         let mut result = Vec::new();
         loop {
-            match self.next()? {
+            match self.next().ok_or(Error::EofWhileParsingString)? {
                 b'"' => {
-                    if self.consume(b'"') {
+                    if self.consume(|b| b == b'"').is_some() {
                         result.push(b'"');
                     } else {
                         break;
@@ -75,28 +75,6 @@ impl<'de> Deserializer<'de> {
         }
         self.space();
         Ok(result)
-    }
-}
-
-trait BytePattern {
-    fn matches(&self, input: u8) -> bool;
-}
-
-impl BytePattern for u8 {
-    fn matches(&self, input: u8) -> bool {
-        *self == input
-    }
-}
-
-impl<const LEN: usize> BytePattern for [u8; LEN] {
-    fn matches(&self, input: u8) -> bool {
-        self.contains(&input)
-    }
-}
-
-impl<'a, P> BytePattern for &'a P where P: BytePattern {
-    fn matches(&self, input: u8) -> bool {
-        <P as BytePattern>::matches(*self, input)
     }
 }
 
