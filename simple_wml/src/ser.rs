@@ -22,7 +22,7 @@ impl<'a> AttributeSerializer<'a> {
 
     pub fn push(&mut self, key: &[u8], value: &[u8]) -> Result<()> {
         if self.last_key.as_slice() >= key {
-            return Err(Error::AttributeOrder);
+            return Err(Error);
         }
         self.last_key.clear();
         self.last_key.extend(key);

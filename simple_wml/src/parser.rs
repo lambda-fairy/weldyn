@@ -21,7 +21,7 @@ impl<'de> Parser<'de> {
 
     pub fn assert_end(&self) -> Result<()> {
         if self.input.len() > 0 {
-            return Err(Error::TrailingCharacters);
+            return Err(Error);
         }
         Ok(())
     }
@@ -46,14 +46,14 @@ impl<'de> Parser<'de> {
         while self.consume(|b| b == b'\t' || b == b'\n' || b == b' ').is_some() {}
     }
 
-    fn identifier(&mut self, eof_error: Error) -> Result<Vec<u8>> {
+    fn identifier(&mut self) -> Result<Vec<u8>> {
         fn is_key_byte(b: u8) -> bool {
             (b'a' <= b && b <= b'z') || b == b'_'
         }
 
-        let first_byte = self.next().ok_or(eof_error)?;
+        let first_byte = self.next().ok_or(Error)?;
         if !is_key_byte(first_byte) {
-            return Err(Error::ExpectedIdent);
+            return Err(Error);
         }
 
         let mut result = vec![first_byte];
@@ -65,10 +65,10 @@ impl<'de> Parser<'de> {
     }
 
     pub fn parse_attribute(&mut self) -> Result<(Vec<u8>, Vec<u8>)> {
-        let key = self.identifier(Error::EofWhileParsingAttribute)?;
+        let key = self.identifier()?;
         self.space();
-        if self.next().ok_or(Error::EofWhileParsingAttribute)? != b'=' {
-            return Err(Error::ExpectedEquals);
+        if self.next().ok_or(Error)? != b'=' {
+            return Err(Error);
         }
         let value = self.parse_string()?;
         Ok((key, value))
@@ -77,7 +77,7 @@ impl<'de> Parser<'de> {
     /// Parses a translatable marker (`_`).
     pub fn parse_translatable_marker(&mut self) -> Result<()> {
         if self.consume(|b| b == b'_').is_none() {
-            return Err(Error::ExpectedTranslatable);
+            return Err(Error);
         }
         self.space();
         Ok(())
@@ -85,12 +85,12 @@ impl<'de> Parser<'de> {
 
     /// Parses a string.
     pub fn parse_string(&mut self) -> Result<Vec<u8>> {
-        if self.next().ok_or(Error::EofWhileParsingString)? != b'"' {
-            return Err(Error::ExpectedString);
+        if self.next().ok_or(Error)? != b'"' {
+            return Err(Error);
         }
         let mut result = Vec::new();
         loop {
-            match self.next().ok_or(Error::EofWhileParsingString)? {
+            match self.next().ok_or(Error)? {
                 b'"' => {
                     if self.consume(|b| b == b'"').is_some() {
                         result.push(b'"');
@@ -122,7 +122,7 @@ mod tests {
     fn cis() {
         let mut de = Parser::new(br#""hello""#);
         let result = de.parse_translatable_marker().unwrap_err();
-        assert_eq!(result, Error::ExpectedTranslatable);
+        assert_eq!(result, Error);
     }
 
     #[test]

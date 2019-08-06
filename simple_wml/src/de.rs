@@ -20,7 +20,7 @@ impl<'de> AttributeDeserializer<'de> {
         if let Ok((key, value)) = self.parser.parse_attribute() {
             // TODO check more errors
             if self.last_key >= key {
-                return Err(Error::AttributeOrder);
+                return Err(Error);
             }
             self.last_key.clear();
             self.last_key.extend(&key);
