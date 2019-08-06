@@ -1,9 +1,7 @@
-use crate::error::{Error, Result};
-
 pub fn to_vec<'a>(
     output: &'a mut Vec<u8>,
-    serialize: impl FnOnce(AttributeSerializer<'a>) -> Result<()>,
-) -> Result<()> {
+    serialize: impl FnOnce(AttributeSerializer<'a>) -> Option<()>,
+) -> Option<()> {
     serialize(AttributeSerializer::new(output))
 }
 
@@ -20,9 +18,9 @@ impl<'a> AttributeSerializer<'a> {
         }
     }
 
-    pub fn push(&mut self, key: &[u8], value: &[u8]) -> Result<()> {
+    pub fn push(&mut self, key: &[u8], value: &[u8]) -> Option<()> {
         if self.last_key.as_slice() >= key {
-            return Err(Error);
+            return None;
         }
         self.last_key.clear();
         self.last_key.extend(key);
@@ -39,7 +37,7 @@ impl<'a> AttributeSerializer<'a> {
 
         self.output.extend(b"\"\n");
 
-        Ok(())
+        Some(())
     }
 
     pub fn start_children(self) -> ChildrenSerializer<'a> {
@@ -59,8 +57,8 @@ impl<'a> ChildrenSerializer<'a> {
     pub fn push(
         &mut self,
         name: &[u8],
-        serialize: impl FnOnce(AttributeSerializer<'_>) -> Result<()>,
-    ) -> Result<()> {
+        serialize: impl FnOnce(AttributeSerializer<'_>) -> Option<()>,
+    ) -> Option<()> {
         self.output.push(b'[');
         self.output.extend(name);
         self.output.extend(b"]\n");
@@ -71,7 +69,7 @@ impl<'a> ChildrenSerializer<'a> {
         self.output.extend(name);
         self.output.extend(b"]\n");
 
-        Ok(())
+        Some(())
     }
 }
 
@@ -90,14 +88,14 @@ mod tests {
             let mut children = attrs.start_children();
             children.push(b"user", |mut attrs| {
                 attrs.push(b"name", b"Li'sar")?;
-                Ok(())
+                Some(())
             })?;
             children.push(b"user", |mut attrs| {
                 attrs.push(b"name", b"Konrad")?;
-                Ok(())
+                Some(())
             })?;
 
-            Ok(())
+            Some(())
         }).unwrap();
 
         assert_eq!(output, &br#"baz="quux"

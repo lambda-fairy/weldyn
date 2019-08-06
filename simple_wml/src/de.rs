@@ -1,4 +1,3 @@
-use crate::error::{Error, Result};
 use crate::parser::Parser;
 
 pub struct AttributeDeserializer<'de> {
@@ -16,17 +15,17 @@ impl<'de> AttributeDeserializer<'de> {
         }
     }
 
-    pub fn next(mut self) -> Result<AttributeResult<'de>> {
-        if let Ok((key, value)) = self.parser.parse_attribute() {
+    pub fn next(mut self) -> Option<AttributeResult<'de>> {
+        if let Some((key, value)) = self.parser.parse_attribute() {
             // TODO check more errors
             if self.last_key >= key {
-                return Err(Error);
+                return None;
             }
             self.last_key.clear();
             self.last_key.extend(&key);
-            Ok(AttributeResult::Continue { key, value, de: self })
+            Some(AttributeResult::Continue { key, value, de: self })
         } else {
-            Ok(AttributeResult::Children { de: ChildrenDeserializer::new(self.parser) })
+            Some(AttributeResult::Children { de: ChildrenDeserializer::new(self.parser) })
         }
     }
 }

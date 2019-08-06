@@ -1,5 +1,3 @@
-use crate::error::{Error, Result};
-
 pub struct Parser<'de> {
     input: &'de [u8],
 }
@@ -19,11 +17,11 @@ impl<'de> Parser<'de> {
         Some(b)
     }
 
-    pub fn assert_end(&self) -> Result<()> {
+    pub fn assert_end(&self) -> Option<()> {
         if self.input.len() > 0 {
-            return Err(Error);
+            return None;
         }
-        Ok(())
+        Some(())
     }
 
     /// Attempts to match a single byte matching the pattern. Does not consume
@@ -46,43 +44,41 @@ impl<'de> Parser<'de> {
         while self.consume(|b| b == b'\t' || b == b'\n' || b == b' ').is_some() {}
     }
 
-    fn identifier(&mut self) -> Result<Vec<u8>> {
+    fn identifier(&mut self) -> Option<Vec<u8>> {
         fn is_key_byte(b: u8) -> bool {
             (b'a' <= b && b <= b'z') || b == b'_'
         }
 
-        let first_byte = self.consume(is_key_byte).ok_or(Error)?;
+        let first_byte = self.consume(is_key_byte)?;
         let mut result = vec![first_byte];
         while let Some(b) = self.consume(is_key_byte) {
             result.push(b);
         }
 
-        Ok(result)
+        Some(result)
     }
 
-    pub fn parse_attribute(&mut self) -> Result<(Vec<u8>, Vec<u8>)> {
+    pub fn parse_attribute(&mut self) -> Option<(Vec<u8>, Vec<u8>)> {
         let key = self.identifier()?;
         self.space();
-        if self.next().ok_or(Error)? != b'=' {
-            return Err(Error);
-        }
+        self.consume(|b| b == b'=')?;
         let value = self.parse_string()?;
-        Ok((key, value))
+        Some((key, value))
     }
 
     /// Parses a translatable marker (`_`).
-    pub fn parse_translatable_marker(&mut self) -> Result<()> {
-        self.consume(|b| b == b'_').ok_or(Error)?;
+    pub fn parse_translatable_marker(&mut self) -> Option<()> {
+        self.consume(|b| b == b'_')?;
         self.space();
-        Ok(())
+        Some(())
     }
 
     /// Parses a string.
-    pub fn parse_string(&mut self) -> Result<Vec<u8>> {
-        self.consume(|b| b == b'"').ok_or(Error)?;
+    pub fn parse_string(&mut self) -> Option<Vec<u8>> {
+        self.consume(|b| b == b'"')?;
         let mut result = Vec::new();
         loop {
-            match self.next().ok_or(Error)? {
+            match self.next()? {
                 b'"' => {
                     if self.consume(|b| b == b'"').is_some() {
                         result.push(b'"');
@@ -94,7 +90,7 @@ impl<'de> Parser<'de> {
             }
         }
         self.space();
-        Ok(result)
+        Some(result)
     }
 }
 
@@ -113,8 +109,8 @@ mod tests {
     #[test]
     fn cis() {
         let mut de = Parser::new(br#""hello""#);
-        let result = de.parse_translatable_marker().unwrap_err();
-        assert_eq!(result, Error);
+        let result = de.parse_translatable_marker();
+        assert!(result.is_none());
     }
 
     #[test]
