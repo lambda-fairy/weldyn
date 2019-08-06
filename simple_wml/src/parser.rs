@@ -51,11 +51,7 @@ impl<'de> Parser<'de> {
             (b'a' <= b && b <= b'z') || b == b'_'
         }
 
-        let first_byte = self.next().ok_or(Error)?;
-        if !is_key_byte(first_byte) {
-            return Err(Error);
-        }
-
+        let first_byte = self.consume(is_key_byte).ok_or(Error)?;
         let mut result = vec![first_byte];
         while let Some(b) = self.consume(is_key_byte) {
             result.push(b);
@@ -76,18 +72,14 @@ impl<'de> Parser<'de> {
 
     /// Parses a translatable marker (`_`).
     pub fn parse_translatable_marker(&mut self) -> Result<()> {
-        if self.consume(|b| b == b'_').is_none() {
-            return Err(Error);
-        }
+        self.consume(|b| b == b'_').ok_or(Error)?;
         self.space();
         Ok(())
     }
 
     /// Parses a string.
     pub fn parse_string(&mut self) -> Result<Vec<u8>> {
-        if self.next().ok_or(Error)? != b'"' {
-            return Err(Error);
-        }
+        self.consume(|b| b == b'"').ok_or(Error)?;
         let mut result = Vec::new();
         loop {
             match self.next().ok_or(Error)? {
