@@ -11,12 +11,6 @@ impl<'de> Parser<'de> {
         self.input.first().copied()
     }
 
-    fn next(&mut self) -> Option<u8> {
-        let b = self.peek()?;
-        self.input = &self.input[1..];
-        Some(b)
-    }
-
     pub fn assert_end(&self) -> Option<()> {
         if self.input.len() > 0 {
             return None;
@@ -26,10 +20,10 @@ impl<'de> Parser<'de> {
 
     /// Attempts to match a single byte matching the pattern. Does not consume
     /// on failure.
-    fn consume(&mut self, pattern: impl Fn(u8) -> bool) -> Option<u8> {
+    fn consume(&mut self, pattern: impl BytePattern) -> Option<u8> {
         match self.peek() {
-            Some(b) if pattern(b) => {
-                self.next().unwrap();
+            Some(b) if pattern.matches(b) => {
+                self.input = &self.input[1..];
                 Some(b)
             }
             _ => None,
@@ -59,36 +53,36 @@ impl<'de> Parser<'de> {
     }
 
     pub fn parse_tag(&mut self) -> Option<(Vec<u8>, bool)> {
-        self.consume(|b| b == b'[')?;
-        let is_open = self.consume(|b| b == b'/').is_some();
+        self.consume(b'[')?;
+        let is_open = self.consume(b'/').is_some();
         let key = self.identifier()?;
-        self.consume(|b| b == b']')?;
+        self.consume(b']')?;
         Some((key, is_open))
     }
 
     pub fn parse_attribute(&mut self) -> Option<(Vec<u8>, Vec<u8>)> {
         let key = self.identifier()?;
         self.space();
-        self.consume(|b| b == b'=')?;
+        self.consume(b'=')?;
         let value = self.parse_string()?;
         Some((key, value))
     }
 
     /// Parses a translatable marker (`_`).
     pub fn parse_translatable_marker(&mut self) -> Option<()> {
-        self.consume(|b| b == b'_')?;
+        self.consume(b'_')?;
         self.space();
         Some(())
     }
 
     /// Parses a string.
     pub fn parse_string(&mut self) -> Option<Vec<u8>> {
-        self.consume(|b| b == b'"')?;
+        self.consume(b'"')?;
         let mut result = Vec::new();
         loop {
-            match self.next()? {
+            match self.consume(())? {
                 b'"' => {
-                    if self.consume(|b| b == b'"').is_some() {
+                    if self.consume(b'"').is_some() {
                         result.push(b'"');
                     } else {
                         break;
@@ -99,6 +93,28 @@ impl<'de> Parser<'de> {
         }
         self.space();
         Some(result)
+    }
+}
+
+trait BytePattern {
+    fn matches(&self, byte: u8) -> bool;
+}
+
+impl<F> BytePattern for F where F: Fn(u8) -> bool {
+    fn matches(&self, byte: u8) -> bool {
+        self(byte)
+    }
+}
+
+impl BytePattern for u8 {
+    fn matches(&self, byte: u8) -> bool {
+        *self == byte
+    }
+}
+
+impl BytePattern for () {
+    fn matches(&self, _byte: u8) -> bool {
+        true
     }
 }
 
