@@ -58,6 +58,14 @@ impl<'de> Parser<'de> {
         Some(result)
     }
 
+    pub fn parse_tag(&mut self) -> Option<(Vec<u8>, bool)> {
+        self.consume(|b| b == b'[')?;
+        let is_open = self.consume(|b| b == b'/').is_some();
+        let key = self.identifier()?;
+        self.consume(|b| b == b']')?;
+        Some((key, is_open))
+    }
+
     pub fn parse_attribute(&mut self) -> Option<(Vec<u8>, Vec<u8>)> {
         let key = self.identifier()?;
         self.space();
