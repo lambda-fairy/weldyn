@@ -1,10 +1,27 @@
+#[derive(Debug, Eq, PartialEq)]
+pub enum Token {
+    Tag { key: Vec<u8>, is_open: bool },
+    Attr { key: Vec<u8>, value: Vec<u8> },
+}
+
 pub struct Parser<'de> {
     input: &'de [u8],
 }
 
+impl<'de> Iterator for Parser<'de> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.parse_attribute().map(|(key, value)| Token::Attr { key, value })
+            .or_else(|| self.parse_tag().map(|(key, is_open)| Token::Tag { key, is_open }))
+    }
+}
+
 impl<'de> Parser<'de> {
     pub fn new(input: &'de [u8]) -> Self {
-        Parser { input }
+        let mut parser = Parser { input };
+        parser.space();
+        parser
     }
 
     fn peek(&mut self) -> Option<u8> {
@@ -34,7 +51,7 @@ impl<'de> Parser<'de> {
     ///
     /// By convention, all parsers (methods starting with `parse_`) handle
     /// trailing whitespace.
-    pub fn space(&mut self) {
+    fn space(&mut self) {
         while self.consume(|b| b == b'\t' || b == b'\n' || b == b' ').is_some() {}
     }
 
@@ -52,7 +69,7 @@ impl<'de> Parser<'de> {
         Some(result)
     }
 
-    pub fn parse_tag(&mut self) -> Option<(Vec<u8>, bool)> {
+    fn parse_tag(&mut self) -> Option<(Vec<u8>, bool)> {
         self.consume(b'[')?;
         let is_open = self.consume(b'/').is_some();
         let key = self.identifier()?;
@@ -60,7 +77,7 @@ impl<'de> Parser<'de> {
         Some((key, is_open))
     }
 
-    pub fn parse_attribute(&mut self) -> Option<(Vec<u8>, Vec<u8>)> {
+    fn parse_attribute(&mut self) -> Option<(Vec<u8>, Vec<u8>)> {
         let key = self.identifier()?;
         self.space();
         self.consume(b'=')?;
@@ -69,14 +86,14 @@ impl<'de> Parser<'de> {
     }
 
     /// Parses a translatable marker (`_`).
-    pub fn parse_translatable_marker(&mut self) -> Option<()> {
+    fn parse_translatable_marker(&mut self) -> Option<()> {
         self.consume(b'_')?;
         self.space();
         Some(())
     }
 
     /// Parses a string.
-    pub fn parse_string(&mut self) -> Option<Vec<u8>> {
+    fn parse_string(&mut self) -> Option<Vec<u8>> {
         self.consume(b'"')?;
         let mut result = Vec::new();
         loop {
