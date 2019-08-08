@@ -28,10 +28,15 @@ impl<'a, 'de> AttributeDeserializer<'a, 'de> {
                     self.last_key.extend(&key);
                     visitor.visit_attribute(key, value)?;
                 }
-                Some(Token::Open { open_key }) => {
+                Some(Token::Open { open_key: first_open_key }) => {
                     let de = ChildrenDeserializer::new(self.parser);
-                    return de.accept(open_key, visitor.start_children());
+                    return de.accept(
+                        first_open_key,
+                        outer_open_key,
+                        visitor.start_children(),
+                    );
                 }
+                // TODO duplication
                 Some(Token::Close { close_key }) => {
                     return outer_open_key
                         .filter(|&open_key| open_key == close_key.as_slice())
@@ -57,19 +62,26 @@ impl<'a, 'de> ChildrenDeserializer<'a, 'de> {
     fn accept(
         mut self,
         first_open_key: Vec<u8>,
+        outer_open_key: Option<&[u8]>,
         mut visitor: impl ChildrenVisitor<'de>,
     ) -> Option<()> {
         self.accept_child(&first_open_key, &mut visitor)?;
         loop {
             match self.parser.next() {
+                Some(Token::Attr { .. }) => {
+                    return None;
+                }
                 Some(Token::Open { open_key }) => {
                     self.accept_child(&open_key, &mut visitor)?;
                 }
-                None => {
-                    return Some(());
+                // TODO duplication
+                Some(Token::Close { close_key }) => {
+                    return outer_open_key
+                        .filter(|&open_key| open_key == close_key.as_slice())
+                        .map(drop);
                 }
-                _ => {
-                    return None;
+                None => {
+                    return if outer_open_key.is_some() { None } else { Some(()) };
                 }
             }
         }
