@@ -1,7 +1,8 @@
 #[derive(Debug, Eq, PartialEq)]
 pub enum Token {
-    Tag { key: Vec<u8>, is_open: bool },
     Attr { key: Vec<u8>, value: Vec<u8> },
+    Open { open_key: Vec<u8> },
+    Close { close_key: Vec<u8> },
 }
 
 pub struct Parser<'de> {
@@ -12,8 +13,7 @@ impl<'de> Iterator for Parser<'de> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.parse_attribute().map(|(key, value)| Token::Attr { key, value })
-            .or_else(|| self.parse_tag().map(|(key, is_open)| Token::Tag { key, is_open }))
+        self.parse_attribute().or_else(|| self.parse_tag())
     }
 }
 
@@ -69,20 +69,26 @@ impl<'de> Parser<'de> {
         Some(result)
     }
 
-    fn parse_tag(&mut self) -> Option<(Vec<u8>, bool)> {
+    fn parse_tag(&mut self) -> Option<Token> {
         self.consume(b'[')?;
         let is_open = self.consume(b'/').is_some();
         let key = self.identifier()?;
         self.consume(b']')?;
-        Some((key, is_open))
+        Some(
+            if is_open {
+                Token::Open { open_key: key }
+            } else {
+                Token::Close { close_key: key }
+            }
+        )
     }
 
-    fn parse_attribute(&mut self) -> Option<(Vec<u8>, Vec<u8>)> {
+    fn parse_attribute(&mut self) -> Option<Token> {
         let key = self.identifier()?;
         self.space();
         self.consume(b'=')?;
         let value = self.parse_string()?;
-        Some((key, value))
+        Some(Token::Attr { key, value })
     }
 
     /// Parses a translatable marker (`_`).

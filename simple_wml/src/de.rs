@@ -16,7 +16,7 @@ impl<'a, 'de> AttributeDeserializer<'a, 'de> {
     pub fn accept(
         mut self,
         mut visitor: impl AttributeVisitor<'de>,
-        open_key: Option<&[u8]>,
+        outer_open_key: Option<&[u8]>,
     ) -> Option<()> {
         loop {
             match self.parser.next() {
@@ -28,17 +28,17 @@ impl<'a, 'de> AttributeDeserializer<'a, 'de> {
                     self.last_key.extend(&key);
                     visitor.visit_attribute(key, value)?;
                 }
-                Some(Token::Tag { key, is_open: true }) => {
+                Some(Token::Open { open_key }) => {
                     let de = ChildrenDeserializer::new(self.parser);
-                    return de.accept(key, visitor.start_children());
+                    return de.accept(open_key, visitor.start_children());
                 }
-                Some(Token::Tag { key: close_key, is_open: false }) => {
-                    return open_key
+                Some(Token::Close { close_key }) => {
+                    return outer_open_key
                         .filter(|&open_key| open_key == close_key.as_slice())
                         .map(drop);
                 }
                 None => {
-                    return if open_key.is_some() { None } else { Some(()) };
+                    return if outer_open_key.is_some() { None } else { Some(()) };
                 }
             }
         }
@@ -62,7 +62,7 @@ impl<'a, 'de> ChildrenDeserializer<'a, 'de> {
         self.accept_child(&first_open_key, &mut visitor)?;
         loop {
             match self.parser.next() {
-                Some(Token::Tag { key: open_key, is_open: true }) => {
+                Some(Token::Open { open_key }) => {
                     self.accept_child(&open_key, &mut visitor)?;
                 }
                 None => {
@@ -80,9 +80,8 @@ impl<'a, 'de> ChildrenDeserializer<'a, 'de> {
         open_key: &[u8],
         visitor: &mut impl ChildrenVisitor<'de>,
     ) -> Option<()> {
-        let attr_de = AttributeDeserializer::new(self.parser);
-        let attr_visitor = visitor.visit_child(&open_key)?;
-        attr_de.accept(attr_visitor, Some(&open_key))
+        let de = AttributeDeserializer::new(self.parser);
+        de.accept(visitor.visit_child(&open_key)?, Some(&open_key))
     }
 }
 
