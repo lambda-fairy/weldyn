@@ -1,11 +1,21 @@
 use crate::token::{Token, Tokens};
 
+pub fn from_slice<'de>(
+    input: &'de [u8],
+    visitor: impl AttributeVisitor<'de>,
+) -> Option<()> {
+    let mut tokens = Tokens::new(input);
+    accept(&mut tokens, visitor, None)?;
+    tokens.assert_end()?;
+    Some(())
+}
+
 enum State<'de, A: AttributeVisitor<'de>> {
     Attributes { visitor: A, last_key: Vec<u8> },
     Children { visitor: A::ChildrenVisitor },
 }
 
-pub fn accept<'de>(
+fn accept<'de>(
     tokens: &mut Tokens<'de>,
     visitor: impl AttributeVisitor<'de>,
     outer_open_key: Option<&[u8]>,

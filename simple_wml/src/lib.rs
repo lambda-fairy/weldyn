@@ -1,3 +1,6 @@
-pub mod de;
-pub mod ser;
-pub mod token;
+mod de;
+mod ser;
+mod token;
+
+pub use de::*;
+pub use ser::*;
