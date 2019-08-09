@@ -1,4 +1,4 @@
-use crate::parser::{Parser, Token};
+use crate::token::{Token, Tokens};
 
 enum State<'de, A: AttributeVisitor<'de>> {
     Attributes { visitor: A, last_key: Vec<u8> },
@@ -6,13 +6,13 @@ enum State<'de, A: AttributeVisitor<'de>> {
 }
 
 pub fn accept<'de>(
-    parser: &mut Parser<'de>,
+    tokens: &mut Tokens<'de>,
     visitor: impl AttributeVisitor<'de>,
     outer_open_key: Option<&[u8]>,
 ) -> Option<()> {
     let mut state = State::Attributes { visitor, last_key: Vec::new() };
     loop {
-        match parser.next() {
+        match tokens.next() {
             Some(Token::Attr { key, value }) => {
                 if let State::Attributes { visitor, last_key } = &mut state {
                     if *last_key >= key {
@@ -29,11 +29,11 @@ pub fn accept<'de>(
                 state = match state {
                     State::Attributes { visitor, .. } => {
                         let mut visitor = visitor.start_children();
-                        accept_child(parser, &open_key, &mut visitor)?;
+                        accept_child(tokens, &open_key, &mut visitor)?;
                         State::Children { visitor }
                     }
                     State::Children { mut visitor } => {
-                        accept_child(parser, &open_key, &mut visitor)?;
+                        accept_child(tokens, &open_key, &mut visitor)?;
                         State::Children { visitor }
                     }
                 };
@@ -51,12 +51,12 @@ pub fn accept<'de>(
 }
 
 fn accept_child<'de>(
-    parser: &mut Parser<'de>,
+    tokens: &mut Tokens<'de>,
     open_key: &[u8],
     visitor: &mut impl ChildrenVisitor<'de>,
 ) -> Option<()> {
     let visitor = visitor.visit_child(&open_key)?;
-    accept(parser, visitor, Some(&open_key))
+    accept(tokens, visitor, Some(&open_key))
 }
 
 pub trait AttributeVisitor<'de> {

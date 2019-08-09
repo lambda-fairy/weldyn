@@ -5,11 +5,11 @@ pub enum Token {
     Close { close_key: Vec<u8> },
 }
 
-pub struct Parser<'de> {
+pub struct Tokens<'de> {
     input: &'de [u8],
 }
 
-impl<'de> Iterator for Parser<'de> {
+impl<'de> Iterator for Tokens<'de> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -17,11 +17,11 @@ impl<'de> Iterator for Parser<'de> {
     }
 }
 
-impl<'de> Parser<'de> {
+impl<'de> Tokens<'de> {
     pub fn new(input: &'de [u8]) -> Self {
-        let mut parser = Parser { input };
-        parser.space();
-        parser
+        let mut tokens = Tokens { input };
+        tokens.space();
+        tokens
     }
 
     fn peek(&mut self) -> Option<u8> {
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn trans() {
-        let mut de = Parser::new(br#"_ "#);
+        let mut de = Tokens::new(br#"_ "#);
         let result = de.parse_translatable_marker().unwrap();
         de.assert_end().unwrap();
         assert_eq!(result, ());
@@ -155,21 +155,21 @@ mod tests {
 
     #[test]
     fn cis() {
-        let mut de = Parser::new(br#""hello""#);
+        let mut de = Tokens::new(br#""hello""#);
         let result = de.parse_translatable_marker();
         assert!(result.is_none());
     }
 
     #[test]
     fn string() {
-        let mut de = Parser::new(br#""hello""#);
+        let mut de = Tokens::new(br#""hello""#);
         let result = de.parse_string().unwrap();
         assert_eq!(result, b"hello");
     }
 
     #[test]
     fn string_escapes() {
-        let mut de = Parser::new(br#""hello ""world""""#);
+        let mut de = Tokens::new(br#""hello ""world""""#);
         let result = de.parse_string().unwrap();
         assert_eq!(result, br#"hello "world""#);
     }
