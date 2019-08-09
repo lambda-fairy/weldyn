@@ -1,4 +1,5 @@
 #![feature(async_await)]
+#![feature(async_closure)]
 
 use byteorder::{ByteOrder, NetworkEndian};
 use futures::prelude::*;
