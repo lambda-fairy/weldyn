@@ -24,10 +24,6 @@ impl<'de> Tokens<'de> {
         tokens
     }
 
-    fn peek(&mut self) -> Option<u8> {
-        self.input.first().copied()
-    }
-
     pub fn assert_end(&self) -> Option<()> {
         if self.input.len() > 0 {
             return None;
@@ -38,9 +34,10 @@ impl<'de> Tokens<'de> {
     /// Attempts to match a single byte matching the pattern. Does not consume
     /// on failure.
     fn consume(&mut self, pattern: impl BytePattern) -> Option<u8> {
-        match self.peek() {
+        let mut input = self.input.iter();
+        match input.next().copied() {
             Some(b) if pattern.matches(b) => {
-                self.input = &self.input[1..];
+                self.input = input.as_slice();
                 Some(b)
             }
             _ => None,
