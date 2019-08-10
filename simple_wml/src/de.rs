@@ -1,81 +1,59 @@
-use crate::token::{Token, Tokens};
+use crate::token::Tokens;
 
-pub fn from_slice<'de>(
+pub fn from_slice<'de, T>(
     input: &'de [u8],
-    visitor: impl AttributeVisitor<'de>,
-) -> Option<()> {
+    action: impl FnOnce(AttributeDeserializer<'_, 'de>) -> Option<T>,
+) -> Option<T> {
     let mut tokens = Tokens::new(input);
-    accept(&mut tokens, visitor, None)?;
+    let result = action(AttributeDeserializer::new(&mut tokens))?;
     tokens.assert_end()?;
-    Some(())
+    Some(result)
 }
 
-enum State<'de, A: AttributeVisitor<'de>> {
-    Attributes { visitor: A, last_key: Vec<u8> },
-    Children { visitor: A::ChildrenVisitor },
+pub struct AttributeDeserializer<'a, 'de: 'a> {
+    tokens: &'a mut Tokens<'de>,
+    last_key: Vec<u8>,
 }
 
-fn accept<'de>(
-    tokens: &mut Tokens<'de>,
-    visitor: impl AttributeVisitor<'de>,
-    outer_open_key: Option<&[u8]>,
-) -> Option<()> {
-    let mut state = State::Attributes { visitor, last_key: Vec::new() };
-    loop {
-        match tokens.next() {
-            Some(Token::Attr { key, value }) => {
-                if let State::Attributes { visitor, last_key } = &mut state {
-                    if *last_key >= key {
-                        return None;
-                    }
-                    last_key.clear();
-                    last_key.extend(&key);
-                    visitor.visit_attribute(key, value)?;
-                } else {
-                    return None;
-                }
-            }
-            Some(Token::Open { open_key }) => {
-                state = match state {
-                    State::Attributes { visitor, .. } => {
-                        let mut visitor = visitor.start_children();
-                        accept_child(tokens, &open_key, &mut visitor)?;
-                        State::Children { visitor }
-                    }
-                    State::Children { mut visitor } => {
-                        accept_child(tokens, &open_key, &mut visitor)?;
-                        State::Children { visitor }
-                    }
-                };
-            }
-            Some(Token::Close { close_key }) => {
-                return outer_open_key
-                    .filter(|&open_key| open_key == close_key.as_slice())
-                    .map(drop);
-            }
-            None => {
-                return if outer_open_key.is_some() { None } else { Some(()) };
-            }
+impl<'a, 'de> AttributeDeserializer<'a, 'de> {
+    fn new(tokens: &'a mut Tokens<'de>) -> Self {
+        AttributeDeserializer { tokens, last_key: Vec::new() }
+    }
+
+    pub fn next_attribute(&mut self) -> Option<(Vec<u8>, Vec<u8>)> {
+        let (key, value) = self.tokens.next_attribute()?;
+        if self.last_key >= key {
+            return None;
         }
+        self.last_key.clear();
+        self.last_key.extend(&key);
+        Some((key, value))
+    }
+
+    pub fn start_children(self) -> ChildrenDeserializer<'a, 'de> {
+        ChildrenDeserializer::new(self.tokens)
     }
 }
 
-fn accept_child<'de>(
-    tokens: &mut Tokens<'de>,
-    open_key: &[u8],
-    visitor: &mut impl ChildrenVisitor<'de>,
-) -> Option<()> {
-    let visitor = visitor.visit_child(&open_key)?;
-    accept(tokens, visitor, Some(&open_key))
+pub struct ChildrenDeserializer<'a, 'de: 'a> {
+    tokens: &'a mut Tokens<'de>,
 }
 
-pub trait AttributeVisitor<'de> {
-    type ChildrenVisitor: ChildrenVisitor<'de>;
-    fn visit_attribute(&mut self, key: Vec<u8>, value: Vec<u8>) -> Option<()>;
-    fn start_children(self) -> Self::ChildrenVisitor;
-}
+impl<'a, 'de> ChildrenDeserializer<'a, 'de> {
+    fn new(tokens: &'a mut Tokens<'de>) -> Self {
+        ChildrenDeserializer { tokens }
+    }
 
-pub trait ChildrenVisitor<'de> {
-    type AttributeVisitor: AttributeVisitor<'de>;
-    fn visit_child(&mut self, open_key: &[u8]) -> Option<Self::AttributeVisitor>;
+    pub fn next_child<F, T>(&mut self, action: F) -> Option<T>
+    where
+        F: FnOnce(&[u8], AttributeDeserializer<'_, 'de>) -> Option<T>,
+    {
+        let open_key = self.tokens.next_open()?;
+        let result = action(&open_key, AttributeDeserializer::new(self.tokens))?;
+        let close_key = self.tokens.next_close()?;
+        if open_key != close_key {
+            return None;
+        }
+        Some(result)
+    }
 }

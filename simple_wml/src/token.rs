@@ -1,20 +1,6 @@
-#[derive(Debug, Eq, PartialEq)]
-pub enum Token {
-    Attr { key: Vec<u8>, value: Vec<u8> },
-    Open { open_key: Vec<u8> },
-    Close { close_key: Vec<u8> },
-}
-
+#[derive(Clone)]
 pub struct Tokens<'de> {
     input: &'de [u8],
-}
-
-impl<'de> Iterator for Tokens<'de> {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.parse_attribute().or_else(|| self.parse_tag())
-    }
 }
 
 impl<'de> Tokens<'de> {
@@ -29,6 +15,13 @@ impl<'de> Tokens<'de> {
             return None;
         }
         Some(())
+    }
+
+    fn attempt<F, T>(&mut self, action: F) -> Option<T> where F: FnOnce(&mut Tokens<'de>) -> Option<T> {
+        let mut clone = self.clone();
+        let result = action(&mut clone)?;
+        *self = clone;
+        Some(result)
     }
 
     /// Attempts to match a single byte matching the pattern. Does not consume
@@ -46,8 +39,8 @@ impl<'de> Tokens<'de> {
 
     /// Consumes one or more spaces.
     ///
-    /// By convention, all parsers (methods starting with `parse_`) handle
-    /// trailing whitespace.
+    /// By convention, all parsers (methods starting with `parse_` and `next_`)
+    /// handle trailing whitespace.
     fn space(&mut self) {
         while self.consume(|b| b == b'\t' || b == b'\n' || b == b' ').is_some() {}
     }
@@ -66,26 +59,35 @@ impl<'de> Tokens<'de> {
         Some(result)
     }
 
-    fn parse_tag(&mut self) -> Option<Token> {
-        self.consume(b'[')?;
-        let is_open = self.consume(b'/').is_some();
-        let key = self.identifier()?;
-        self.consume(b']')?;
-        Some(
-            if is_open {
-                Token::Open { open_key: key }
-            } else {
-                Token::Close { close_key: key }
-            }
-        )
+    pub fn next_open(&mut self) -> Option<Vec<u8>> {
+        self.attempt(|this| {
+            this.consume(b'[')?;
+            let key = this.identifier()?;
+            this.consume(b']')?;
+            this.space();
+            Some(key)
+        })
     }
 
-    fn parse_attribute(&mut self) -> Option<Token> {
-        let key = self.identifier()?;
-        self.space();
-        self.consume(b'=')?;
-        let value = self.parse_string()?;
-        Some(Token::Attr { key, value })
+    pub fn next_close(&mut self) -> Option<Vec<u8>> {
+        self.attempt(|this| {
+            this.consume(b'[')?;
+            this.consume(b'/')?;
+            let key = this.identifier()?;
+            this.consume(b']')?;
+            this.space();
+            Some(key)
+        })
+    }
+
+    pub fn next_attribute(&mut self) -> Option<(Vec<u8>, Vec<u8>)> {
+        self.attempt(|this| {
+            let key = this.identifier()?;
+            this.space();
+            this.consume(b'=')?;
+            let value = this.parse_string()?;
+            Some((key, value))
+        })
     }
 
     /// Parses a translatable marker (`_`).
