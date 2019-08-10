@@ -1,13 +1,13 @@
 #[derive(Clone)]
-pub struct Tokens<'de> {
+pub struct Parser<'de> {
     input: &'de [u8],
 }
 
-impl<'de> Tokens<'de> {
+impl<'de> Parser<'de> {
     pub fn new(input: &'de [u8]) -> Self {
-        let mut tokens = Tokens { input };
-        tokens.space();
-        tokens
+        let mut parser = Parser { input };
+        parser.space();
+        parser
     }
 
     pub fn assert_end(&self) -> Option<()> {
@@ -17,7 +17,10 @@ impl<'de> Tokens<'de> {
         Some(())
     }
 
-    fn attempt<F, T>(&mut self, action: F) -> Option<T> where F: FnOnce(&mut Tokens<'de>) -> Option<T> {
+    fn attempt<F, T>(&mut self, action: F) -> Option<T>
+    where
+        F: FnOnce(&mut Parser<'de>) -> Option<T>,
+    {
         let mut clone = self.clone();
         let result = action(&mut clone)?;
         *self = clone;
@@ -146,7 +149,7 @@ mod tests {
 
     #[test]
     fn trans() {
-        let mut de = Tokens::new(br#"_ "#);
+        let mut de = Parser::new(br#"_ "#);
         let result = de.parse_translatable_marker().unwrap();
         de.assert_end().unwrap();
         assert_eq!(result, ());
@@ -154,21 +157,21 @@ mod tests {
 
     #[test]
     fn cis() {
-        let mut de = Tokens::new(br#""hello""#);
+        let mut de = Parser::new(br#""hello""#);
         let result = de.parse_translatable_marker();
         assert!(result.is_none());
     }
 
     #[test]
     fn string() {
-        let mut de = Tokens::new(br#""hello""#);
+        let mut de = Parser::new(br#""hello""#);
         let result = de.parse_string().unwrap();
         assert_eq!(result, b"hello");
     }
 
     #[test]
     fn string_escapes() {
-        let mut de = Tokens::new(br#""hello ""world""""#);
+        let mut de = Parser::new(br#""hello ""world""""#);
         let result = de.parse_string().unwrap();
         assert_eq!(result, br#"hello "world""#);
     }
