@@ -1,6 +1,6 @@
 use crate::parser::Parser;
 
-pub fn from_slice<'de, T>(
+pub fn from_bytes<'de, T>(
     input: &'de [u8],
     action: impl FnOnce(AttributeDeserializer<'_, 'de>) -> Option<T>,
 ) -> Option<T> {
